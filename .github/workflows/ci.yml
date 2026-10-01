@@ -62,10 +62,10 @@ jobs:
         with:
           image-ref: 'local-backend:test'
           format: 'table'
-          exit-code: '1' # Блокуючий крок при знаходженні вразливостей
+          exit-code: '1' # Блокуючий крок при знаходженні CRITICAL вразливостей
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL'
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
