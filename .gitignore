@@ -1,0 +1,9 @@
+# Ігноруємо папку з модулями Node.js
+node_modules/
+dist/
+
+# Ігноруємо базу даних Postgres (volumes)
+pgdata/
+
+# Ігноруємо змінні середовища
+.env
