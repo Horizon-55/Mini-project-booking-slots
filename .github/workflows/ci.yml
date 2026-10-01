@@ -22,22 +22,22 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        working-directory: ./
+        working-directory: ./backend
         run: npm ci
 
       - name: Run ESLint (Static Analysis)
-        working-directory: ./
+        working-directory: ./backend
         run: npm run lint
 
       - name: Build Service
-        working-directory: ./
+        working-directory: ./backend
         run: npm run build
 
       - name: Run Integration Tests
-        working-directory: ./
+        working-directory: ./backend
         run: npm run test
 
   docker-build-and-push:
@@ -56,7 +56,7 @@ jobs:
       - name: Build local image for scanning
         uses: docker/build-push-action@v5
         with:
-          context: ./
+          context: ./backend
           push: false
           tags: local-backend:test
           load: true
@@ -93,7 +93,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
         with:
-          context: ./
+          context: ./backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

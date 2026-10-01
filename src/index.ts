@@ -12,13 +12,13 @@ app.get('/api/health', async (req: Request, res: Response) => {
     try {
         const dbResult = await pool.query('SELECT NOW()');
         res.json({ status: 'ok', timestamp: dbResult.rows[0].now });
-    } catch (error) {
+    } catch (_error) {
         res.status(500).json({ error: 'Помилка підключення до бази даних' });
     }
 });
 
 // Глобальний обробник виняткових ситуацій
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     if (err.name === 'ZodError') {
         return res.status(400).json({ error: 'Помилка валідації', details: err.errors });
     }
