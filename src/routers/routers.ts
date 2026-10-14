@@ -1,6 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { pool, redisClient } from '../db';
-import { registerUserSchema, createBookingSchema } from '../validators';
+import { registerUserSchema, createBookingSchema, createWorkspaceSchema } from '../validators';
+import { 
+    getFromCache, 
+    setToCache, 
+    invalidateCachePattern, 
+    CacheKeys, 
+    DEFAULT_CACHE_TTL_SECONDS 
+} from '../cache';
 
 export const router = Router();
 
@@ -19,10 +26,22 @@ router.post('/users/register', async (req: Request, res: Response, next: NextFun
     }
 });
 
-// 2. Отримання списку вільних місць
+// 2. Отримання списку вільних місць (Read-Intensive з патерном Cache-Aside, ЛР4 п. 2.3)
 router.get('/workspaces', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { type } = req.query;
+        const cacheKey = CacheKeys.workspacesList(type as string | undefined);
+
+        // Крок 1: Запит до кешу (Cache Lookup)
+        const { data: cachedWorkspaces, isAvailable } = await getFromCache<any[]>(cacheKey);
+
+        // Крок 2: Cache Hit - повернення без звернення до БД
+        if (cachedWorkspaces) {
+            res.setHeader('X-Cache', 'HIT');
+            return res.json(cachedWorkspaces);
+        }
+
+        // Крок 3: Cache Miss (або Fallback) - зчитування з PostgreSQL
         let query = 'SELECT * FROM workspaces WHERE status = $1';
         const params: any[] = ['active'];
 
@@ -32,7 +51,35 @@ router.get('/workspaces', async (req: Request, res: Response, next: NextFunction
         }
 
         const result = await pool.query(query, params);
+
+        // Якщо Redis працездатний, зберігаємо дані з регламентом TTL
+        if (isAvailable) {
+            await setToCache(cacheKey, result.rows, DEFAULT_CACHE_TTL_SECONDS);
+            res.setHeader('X-Cache', 'MISS');
+        } else {
+            // Graceful Degradation / Fallback режим: Redis недоступний, але запит успішний через БД
+            res.setHeader('X-Cache', 'BYPASS');
+        }
+
         res.json(result.rows);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// 2.1 Створення нового робочого місця (Мутація даних з інвалідацією кешу, ЛР4 п. 2.5)
+router.post('/workspaces', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const data = createWorkspaceSchema.parse(req.body);
+        const result = await pool.query(
+            'INSERT INTO workspaces (name, type, status) VALUES ($1, $2, $3) RETURNING *',
+            [data.name, data.type, data.status]
+        );
+
+        // Повна інвалідація всіх списків робочих місць у розподіленому кеші
+        await invalidateCachePattern(CacheKeys.workspacesPattern());
+
+        res.status(201).json(result.rows[0]);
     } catch (error) {
         next(error);
     }

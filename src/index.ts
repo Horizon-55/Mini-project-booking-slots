@@ -1,33 +1,81 @@
 import express, { Request, Response, NextFunction } from 'express';
 import os from 'os';
 import { router as apiRoutes } from './routers/routers';
-import { pool } from './db';
+import { pool, redisClient } from './db';
 
 const app = express();
 app.use(express.json());
 
-// ДОДАНО: Глобальний middleware для ідентифікації екземпляра (Stateless requirement)
+// Глобальний middleware для ідентифікації екземпляра (Stateless requirement)
 app.use((req: Request, res: Response, next: NextFunction) => {
     // os.hostname() у Docker повертає унікальний ID контейнера
     res.setHeader('X-Instance-ID', os.hostname());
     next();
 });
 
+// Синтетична затримка для симуляції гетерогенного/деградованого вузла (ЛР3 п. 2.3.3)
+const defaultDelayMs = Number(process.env.LATENCY_DELAY_MS) || 0;
+app.use((req: Request, res: Response, next: NextFunction) => {
+    // Можливість задати затримку через ENV (для конкретного контейнера) або через query param ?delay=
+    const queryDelay = req.query.delay ? Number(req.query.delay) : null;
+    const delay = queryDelay !== null && !isNaN(queryDelay) ? queryDelay : defaultDelayMs;
+
+    // Не затримуємо health-check запити, щоб уникнути хибних спрацювань моніторингу
+    if (delay > 0 && !req.path.endsWith('/health')) {
+        setTimeout(next, delay);
+    } else {
+        next();
+    }
+});
+
 // Підключення всіх ендпоінтів з префіксом /api
 app.use('/api', apiRoutes);
 
-app.get('/api/health', async (req: Request, res: Response) => {
+// Health Check endpoint (ЛР3 п. 2.4.1) з комплексною перевіркою залежностей (DB + Redis)
+const healthHandler = async (req: Request, res: Response) => {
+    const checks: Record<string, string> = {
+        database: 'down',
+        redis: 'down'
+    };
+    let isHealthy = true;
+
+    // 1. Перевірка PostgreSQL
     try {
-        const dbResult = await pool.query('SELECT NOW()');
-        res.json({
-            status: 'ok',
-            timestamp: dbResult.rows[0].now,
-            instance: os.hostname() // Також зручно повертати в тілі health-чеку
-        });
-    } catch (error) {
-        res.status(500).json({ error: 'Помилка підключення до бази даних' });
+        await pool.query('SELECT 1');
+        checks.database = 'ok';
+    } catch (dbError: any) {
+        isHealthy = false;
+        checks.database = `error: ${dbError.message || dbError}`;
     }
-});
+
+    // 2. Перевірка Redis
+    try {
+        const pong = await redisClient.ping();
+        if (pong === 'PONG') {
+            checks.redis = 'ok';
+        } else {
+            isHealthy = false;
+            checks.redis = `unexpected response: ${pong}`;
+        }
+    } catch (redisError: any) {
+        isHealthy = false;
+        checks.redis = `error: ${redisError.message || redisError}`;
+    }
+
+    const statusCode = isHealthy ? 200 : 503;
+    res.status(statusCode).json({
+        status: isHealthy ? 'ok' : 'degraded',
+        instance: os.hostname(),
+        uptimeSeconds: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+        latencyDelayMs: defaultDelayMs,
+        checks
+    });
+};
+
+// Доступно як за прямим /health, так і через /api/health
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Глобальний обробник виняткових ситуацій
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

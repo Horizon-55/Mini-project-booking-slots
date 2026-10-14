@@ -4,7 +4,7 @@ metadata:
   name: api-deployment
   namespace: workspace-booking
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: backend-api

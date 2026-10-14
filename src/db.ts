@@ -25,5 +25,14 @@ export const redisClient = createClient({
     url: `redis://${redisHost}:${redisPort}`
 });
 
-redisClient.on('error', (err) => console.error('Redis Error:', err));
-redisClient.connect().catch(console.error);
+redisClient.on('error', (err) => {
+    if (process.env.NODE_ENV !== 'test') {
+        console.error('Redis Error:', err);
+    }
+});
+
+if (process.env.NODE_ENV !== 'test') {
+    redisClient.connect().catch((err) => {
+        console.error('Redis connection failed:', err);
+    });
+}

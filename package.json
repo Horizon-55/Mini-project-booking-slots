@@ -8,6 +8,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "jest",
+    "test:balance": "node scripts/test-balancing.js",
+    "test:asymmetric": "node scripts/test-asymmetric.js",
+    "test:failover": "node scripts/test-failover.js",
+    "test:cache": "node scripts/test-cache.js",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [],

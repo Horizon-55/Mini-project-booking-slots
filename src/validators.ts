@@ -11,3 +11,9 @@ export const createBookingSchema = z.object({
     start_time: z.string().datetime("Некоректний формат часу"),
     end_time: z.string().datetime("Некоректний формат часу")
 });
+
+export const createWorkspaceSchema = z.object({
+    name: z.string().min(2, "Назва повинна містити щонайменше 2 символи"),
+    type: z.enum(['desk', 'meeting_room', 'phone_booth']).default('desk'),
+    status: z.enum(['active', 'maintenance']).default('active')
+});
