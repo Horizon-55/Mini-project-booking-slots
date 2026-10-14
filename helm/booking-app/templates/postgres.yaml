@@ -1,0 +1,71 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "booking-app.postgresFullname" . }}
+  labels:
+    {{- include "booking-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "booking-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "booking-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "booking-app.fullname" . }}-secret
+              key: DB_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "booking-app.fullname" . }}-secret
+              key: DB_PASSWORD
+        - name: POSTGRES_DB
+          value: {{ .Values.config.dbName | quote }}
+        ports:
+        - containerPort: 5432
+          name: postgres
+        resources:
+          {{- toYaml .Values.postgres.resources | nindent 10 }}
+        {{- if .Values.postgres.persistence.enabled }}
+        volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql/data
+        {{- end }}
+      {{- if .Values.postgres.persistence.enabled }}
+      volumes:
+      - name: pgdata
+        persistentVolumeClaim:
+          claimName: {{ include "booking-app.postgresFullname" . }}-pvc
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "booking-app.postgresFullname" . }}
+  labels:
+    {{- include "booking-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "booking-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+{{- end }}

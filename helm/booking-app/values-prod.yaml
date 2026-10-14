@@ -1,0 +1,40 @@
+# Values for PRODUCTION environment
+replicaCount: 3
+
+image:
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "10"
+  hosts:
+    - host: booking.prod.company.internal
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+config:
+  nodeEnv: "production"
+  latencyDelayMs: "0"
+
+postgres:
+  persistence:
+    enabled: true
+    size: 10Gi

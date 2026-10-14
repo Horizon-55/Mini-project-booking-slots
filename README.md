@@ -203,3 +203,110 @@ flowchart TD
     API2 -->|"POST /api/workspaces (Mutation)"| Postgres
     API2 -.->|"Invalidate Pattern cache:workspaces:*"| Redis
 ```
+
+---
+
+## 8. Лабораторна робота №4 (Технології DevOps): Пакування застосунку в Helm-чарт
+
+### 1. Структура створеного Helm-чарта (`helm/booking-app`)
+Всі маніфести Kubernetes із попередніх робіт декомпозовано та переведено у гнучкі шаблони (templates) із параметризацією через змінні:
+
+```text
+helm/booking-app/
+├── Chart.yaml              # Метадані чарта (name, version, appVersion)
+├── values.yaml             # Значення за замовчуванням (Development середовище)
+├── values-dev.yaml         # Конфігурація для середовища розробки (dev)
+├── values-prod.yaml        # Конфігурація для високопродуктивного продакшну (prod)
+└── templates/
+    ├── _helpers.tpl        # Шаблони іменованих назв (fullname), міток (labels, selectorLabels)
+    ├── deployment.yaml     # Параметризований деплоймент бекенд-застосунку
+    ├── service.yaml        # Мережевий сервіс (NodePort для dev, ClusterIP для prod)
+    ├── configmap.yaml      # Змінні середовища застосунку (порт, хости БД/кешу)
+    ├── secret.yaml         # Секретні змінні (кредити БД), що беруться з values
+    ├── postgres.yaml       # Deployment та Service для PostgreSQL
+    ├── postgres-pvc.yaml   # Персистентний диск для БД (активується через persistence.enabled)
+    ├── redis.yaml          # Deployment та Service для розподіленого кешу Redis
+    ├── ingress.yaml        # Маршрутизація зовнішнього трафіку (активується через ingress.enabled)
+    ├── NOTES.txt           # Інструкція з доступу до сервісу після встановлення
+    └── tests/
+        └── test-connection.yaml  # Helm Test Hook (Завдання 9.b) для перевірки /api/health
+```
+
+---
+
+### 2. Різниця між `version` та `appVersion` для проекту
+* **`version: 1.0.0` (Chart Version):**  
+  Версія самого Helm-пакета за стандартом SemVer. Вона інкрементується при зміні шаблонів маніфестів, додаванні нових ресурсів K8s, зміні структури `values.yaml` або логіки `_helpers.tpl` незалежно від вихідного коду програми.
+* **`appVersion: "1.0.0"` (Application Version):**  
+  Версія бізнес-додатка (`booking-api`), яка визначає версію скомпільованого бекенду та відповідний Docker-образ (`image: booking-api:1.0.0`). Змінюється тільки при релізі нових фіч чи багфіксів у Node.js коді.
+
+---
+
+### 3. Параметри `values.yaml` та порівняння середовищ (dev vs prod)
+
+| Параметр | Опис призначення | `values-dev.yaml` (Dev) | `values-prod.yaml` (Prod) |
+| :--- | :--- | :--- | :--- |
+| `replicaCount` | Кількість реплік бекенд-сервісу | `1` (економія ресурсів) | `3` (High-Load балансування) |
+| `image.tag` | Тег Docker-образу | `1.0.0-dev` | `1.0.0` (стабільний продакшн) |
+| `service.type` | Тип Kubernetes Service | `NodePort` (порт `30080` для Minikube) | `ClusterIP` (внутрішня маршрутизація) |
+| `resources.requests` | Гарантовані ресурси CPU/RAM | `cpu: 50m`, `memory: 64Mi` | `cpu: 200m`, `memory: 256Mi` |
+| `resources.limits` | Граничні ліміти CPU/RAM | `cpu: 150m`, `memory: 128Mi` | `cpu: 500m`, `memory: 512Mi` |
+| `ingress.enabled` | Маршрутизація Ingress контролером | `false` | `true` (`booking.prod.company.internal`) |
+| `postgres.persistence` | Постійний диск для PostgreSQL | `enabled: false` (ефемерне сховище) | `enabled: true`, `size: 10Gi` |
+
+#### Порівняння згенерованих маніфестів без розгортання в кластер (Dry Run):
+```bash
+# Перегляд маніфестів для Dev-середовища:
+helm template my-booking ./helm/booking-app -f ./helm/booking-app/values-dev.yaml
+
+# Перегляд маніфестів для Prod-середовища:
+helm template my-booking ./helm/booking-app -f ./helm/booking-app/values-prod.yaml
+```
+
+---
+
+### 4. Пріоритет значень конфігурації у Helm
+Під час обчислення фінальних значень для релізу Helm застосовує наступну ієрархію пріоритетів (від найнижчого до найвищого):
+1. **`values.yaml` (Базовий рівень):** значення за замовчуванням, описані в корені чарта.
+2. **Файли значень `-f <file.yaml>` (Середній рівень):** перекривають базовий `values.yaml`. Якщо вказано кілька файлів `-f file1.yaml -f file2.yaml`, значення з кожного наступного файлу перекривають попередні.
+3. **Прапорці `--set key=value` (Найвищий пріоритет):** перекривають абсолютно всі значення, отримані з будь-яких YAML-файлів.
+
+---
+
+### 5. Повний життєвий цикл релізу (Команди для захисту)
+
+```bash
+# 1. Валідація синтаксису чарта
+helm lint ./helm/booking-app
+
+# 2. Встановлення релізу в окремому namespace
+helm install booking-release ./helm/booking-app -f ./helm/booking-app/values-dev.yaml -n workspace-booking --create-namespace
+
+# 3. Перевірка статусу релізу та отримання значень
+helm list -n workspace-booking
+helm get values booking-release -n workspace-booking
+
+# 4. Виконання тесту релізу (Завдання 9.b)
+helm test booking-release -n workspace-booking
+
+# 5. Оновлення релізу через --set (зміна тега образу або реплік)
+helm upgrade booking-release ./helm/booking-app --set replicaCount=2 -n workspace-booking
+
+# 6. Оновлення на конфігурацію іншого середовища (Prod)
+helm upgrade booking-release ./helm/booking-app -f ./helm/booking-app/values-prod.yaml -n workspace-booking
+
+# 7. Перегляд історії ревізій релізу
+helm history booking-release -n workspace-booking
+
+# 8. Відкат релізу на попередню робочу ревізію
+helm rollback booking-release 1 -n workspace-booking
+
+# 9. Видалення релізу
+helm uninstall booking-release -n workspace-booking
+```
+
+> **Де Helm зберігає стан релізу в кластері?**  
+> Helm зберігає кожен реліз та повну історію ревізій у формі Kubernetes **Secret** у тому самому namespace, куди встановлено реліз.  
+> Їх можна побачити командою:  
+> `kubectl get secrets -n workspace-booking -l owner=helm`  
+> Назва секрету має формат: `sh.helm.release.v1.<RELEASE_NAME>.v<REVISION_NUMBER>`. Усередині цього секрету зберігаються gzip-стиснуті та base64-закодовані метадані чарта, передані values та згенеровані маніфести.
