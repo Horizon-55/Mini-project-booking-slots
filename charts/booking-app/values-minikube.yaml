@@ -4,7 +4,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/horizon-55/mini-project-booking-slots
   pullPolicy: IfNotPresent
-  tag: "non-existent-999"
+  tag: "1.1.0"
 
 service:
   type: NodePort
