@@ -1,10 +1,22 @@
-# Values for Minikube GitOps environment (DevOps Lab 5)
-replicaCount: 1
+# Values for Minikube GitOps environment (DevOps Lab 6: Argo Rollouts)
+replicaCount: 4
 
 image:
   repository: ghcr.io/horizon-55/mini-project-booking-slots
   pullPolicy: IfNotPresent
-  tag: "1.1.0"
+  tag: "1.0.0"
+
+# Стратегія Progressive Delivery (ЛР-6)
+rollout:
+  enabled: true
+  canary:
+    steps:
+      - setWeight: 25
+      - pause: { duration: 15s }
+      - setWeight: 50
+      - pause: {} # Ручна пауза для верифікації та promote
+      - setWeight: 75
+      - pause: { duration: 15s }
 
 service:
   type: NodePort

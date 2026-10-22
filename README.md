@@ -397,4 +397,80 @@ kubectl apply -f bootstrap/root-application.yaml
    git revert HEAD
    git push origin main
    ```
-4. Кластер повертається у повністю працездатний стан **Synced + Healthy**. Історія зафіксована у `git log` та у вкладці **History and Rollback** інтерфейсу Argo CD.
+4. Кластер повертається у повністю працездатний стан **Synced + Healthy**. Історія зафіксована у `git log` та у вкладці **History and Rollback** інтерфейсу Argo CD.
+
+---
+
+## 10. Лабораторна робота №6 (Технології DevOps): Progressive Delivery (Canary Deployment з Argo Rollouts)
+
+### 1. Обґрунтування вибору стратегії: Canary vs Blue-Green
+Для сервісу бронювання робочих місць (`booking-api`) обрано стратегію **Canary Deployment**:
+* **Захист критичного стану (State-Sensitivity):** застосунок виконує транзакційні операції у PostgreSQL та встановлює розподілені блокування через Redlock у Redis. Канареечний реліз дозволяє спрямувати на нову версію спочатку лише **25% реального трафіку** і переконатися у відсутності аномалій.
+* **Ефективне використання ресурсів:** Blue-Green вимагає миттєвого подвоєння обчислювальних ресурсів кластера (+100% надлишкових подів). Canary при 4 репліках додає лише 1 новий под, поступово заміщуючи старі.
+
+---
+
+### 2. Специфікація кроків Canary у Helm-чарті
+У `charts/booking-app/templates/rollout.yaml` та `values-minikube.yaml` налаштовано 3 кроки поступового релізу (`replicaCount: 4`):
+```yaml
+rollout:
+  enabled: true
+  canary:
+    steps:
+      - setWeight: 25              # 1 новий под (25%), 3 старі поди (75%)
+      - pause: { duration: 15s }   # Автоматична пауза-таймер для збору метрик
+      - setWeight: 50              # 2 нові поди (50%), 2 старі поди (50%)
+      - pause: {}                  # РУЧНА ПАУЗА: зупинка для верифікації
+      - setWeight: 75              # 3 нові поди (75%), 1 старий под (25%)
+      - pause: { duration: 15s }   # Фінальний таймер перед 100%
+```
+
+---
+
+### 3. Контролер Argo Rollouts через Argo CD
+Контролер встановлюється повністю декларативно через GitOps:
+* **`argocd-apps/argo-rollouts.yaml`:** окремий Application для офіційного Helm-чарту `argo-rollouts` (з увімкненим дашбордом `dashboard.enabled: true`).
+* **CLI Plugin:** встановлено розширення `kubectl argo rollouts` для моніторингу та ручного промоуту.
+
+---
+
+### 4. Сценарії захисту перед викладачем
+
+#### Сценарій 1: Запуск релізу нової версії (v1.1.0)
+1. Зміна тегу образу у `charts/booking-app/values-minikube.yaml`:
+   ```yaml
+   image:
+     tag: "1.1.0"
+   ```
+2. Відкрити моніторинг Rollout у реальному часі:
+   ```bash
+   kubectl argo rollouts get rollout booking-app -n workspace-booking --watch
+   ```
+3. Запустити скрипт перевірки розподілу трафіку (на ручній паузі 50% або кроці 25%):
+   ```bash
+   npm run test:canary
+   ```
+   *Скрипт надсилає запити до `/api/version` та наочно показує відсоткове співвідношення відповідей версій 1.0.0 та 1.1.0.*
+
+4. Продовження релізу після перевірки (Promote):
+   ```bash
+   kubectl argo rollouts promote booking-app -n workspace-booking
+   ```
+   *Після промоуту Rollout переходить на крок 75% -> 100%, і всі поди оновлюються на нову версію.*
+
+#### Сценарій 2: Скасування релізу (Abort & Rollback)
+1. Запуск релізу нової версії (наприклад `tag: "1.2.0"`).
+2. На проміжному кроці канареечного релізу примусово зупинити його:
+   ```bash
+   kubectl argo rollouts abort booking-app -n workspace-booking
+   ```
+3. **Пояснення для викладача:**
+   * Трафік миттєво повертається на 100% стабільну версію.
+   * В Argo CD статус стає **Synced / Degraded** (маніфест синхронізовано з Git, але Rollout перебуває в зупиненому аварійному стані).
+4. Завершення відкату у Git:
+   ```bash
+   git revert HEAD --no-edit
+   git push origin main
+   ```
+   *Кластер повертається у повністю зелений стан **Synced / Healthy**.*
+

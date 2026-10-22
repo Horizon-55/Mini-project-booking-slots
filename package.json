@@ -12,6 +12,7 @@
     "test:asymmetric": "node scripts/test-asymmetric.js",
     "test:failover": "node scripts/test-failover.js",
     "test:cache": "node scripts/test-cache.js",
+    "test:canary": "node scripts/test-canary.js",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [],
