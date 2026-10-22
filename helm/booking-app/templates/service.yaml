@@ -8,6 +8,7 @@ spec:
   type: {{ .Values.service.type }}
   selector:
     {{- include "booking-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: app
   ports:
     - port: {{ .Values.service.port }}
       targetPort: {{ .Values.service.targetPort }}

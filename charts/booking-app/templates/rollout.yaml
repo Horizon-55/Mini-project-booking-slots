@@ -14,10 +14,12 @@ spec:
   selector:
     matchLabels:
       {{- include "booking-app.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: app
   template:
     metadata:
       labels:
         {{- include "booking-app.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: app
     spec:
       containers:
       - name: {{ .Chart.Name }}
