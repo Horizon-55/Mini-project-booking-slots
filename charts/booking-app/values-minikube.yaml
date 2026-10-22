@@ -4,7 +4,7 @@ replicaCount: 4
 image:
   repository: ghcr.io/horizon-55/mini-project-booking-slots
   pullPolicy: IfNotPresent
-  tag: "1.1.0"
+  tag: "1.0.0"
 
 # Стратегія Progressive Delivery (ЛР-6)
 rollout:
