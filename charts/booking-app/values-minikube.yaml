@@ -1,0 +1,33 @@
+# Values for Minikube GitOps environment (DevOps Lab 5)
+replicaCount: 1
+
+image:
+  repository: ghcr.io/horizon-55/mini-project-booking-slots
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 3000
+  nodePort: 30080
+
+ingress:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+config:
+  nodeEnv: "production"
+  appVersion: "1.0.0"
+  latencyDelayMs: "0"
+
+postgres:
+  persistence:
+    enabled: false

@@ -65,6 +65,7 @@ const healthHandler = async (req: Request, res: Response) => {
     const statusCode = isHealthy ? 200 : 503;
     res.status(statusCode).json({
         status: isHealthy ? 'ok' : 'degraded',
+        version: process.env.APP_VERSION || '1.0.0',
         instance: os.hostname(),
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
@@ -73,9 +74,20 @@ const healthHandler = async (req: Request, res: Response) => {
     });
 };
 
-// Доступно як за прямим /health, так і через /api/health
+// Версіонування застосунку (DevOps ЛР-5 п. 2.b)
+const versionHandler = (req: Request, res: Response) => {
+    res.json({
+        version: process.env.APP_VERSION || '1.0.0',
+        instance: os.hostname(),
+        environment: process.env.NODE_ENV || 'development'
+    });
+};
+
+// Доступно як за прямим шляхом, так і через /api
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
+app.get('/version', versionHandler);
+app.get('/api/version', versionHandler);
 
 // Глобальний обробник виняткових ситуацій
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

@@ -6,6 +6,7 @@ metadata:
     {{- include "booking-app.labels" . | nindent 4 }}
 data:
   NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  APP_VERSION: {{ default .Chart.AppVersion .Values.config.appVersion | quote }}
   PORT: {{ .Values.config.port | quote }}
   DB_HOST: {{ include "booking-app.postgresFullname" . | quote }}
   DB_PORT: {{ .Values.config.dbPort | quote }}

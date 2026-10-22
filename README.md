@@ -310,3 +310,91 @@ helm uninstall booking-release -n workspace-booking
 > Їх можна побачити командою:  
 > `kubectl get secrets -n workspace-booking -l owner=helm`  
 > Назва секрету має формат: `sh.helm.release.v1.<RELEASE_NAME>.v<REVISION_NUMBER>`. Усередині цього секрету зберігаються gzip-стиснуті та base64-закодовані метадані чарта, передані values та згенеровані маніфести.
+
+---
+
+## 9. Лабораторна робота №5 (Технології DevOps): GitOps розгортання через Argo CD
+
+### 1. Архітектура та патерн App of Apps
+У лабораторній роботі здійснено перехід від імперативного розгортання (`helm upgrade --install`) до декларативної моделі **GitOps**. Репозиторій Git є єдиним джерелом правди (Single Source of Truth), а оператор **Argo CD** безперервно узгоджує стан кластера з описаним у Git.
+
+Розгортання реалізовано за патерном **App of Apps**:
+* **`bootstrap/root-application.yaml` (Кореневий Application):** єдиний маніфест, який застосовується адміністратором вручну. Він відстежує каталог `argocd-apps/`.
+* **`argocd-apps/booking-app.yaml` (Дочірній Application):** генерується автоматично кореневим додатком. Вказує на Helm-чарт у `charts/booking-app` з конфігурацією `values-minikube.yaml` і розгортає робоче навантаження у namespace `workspace-booking`.
+* **`charts/booking-app/`:** параметризований Helm-чарт застосунку (Node.js API, PostgreSQL 15, Redis 7).
+
+```text
+Mini-project-booking-slots/
+├── bootstrap/
+│   └── root-application.yaml        # App of Apps (Root)
+├── argocd-apps/
+│   └── booking-app.yaml             # Target Application manifest
+└── charts/
+    └── booking-app/                 # Helm Chart
+        ├── values-minikube.yaml     # Minikube GitOps environment values
+        └── ...
+```
+
+---
+
+### 2. Доступ до веб-інтерфейсу Argo CD
+```bash
+# 1. Прокидання порту веб-інтерфейсу
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+# 2. Отримання початкового пароля адміністратора
+$pwd = kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}"
+[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($pwd))
+
+# 3. Вхід у браузері:
+# URL: https://localhost:8080
+# Username: admin
+# Password: <отриманий пароль>
+```
+
+---
+
+### 3. Сценарії лайв-демонстрації для захисту
+
+#### Сценарій 1: Первинне розгортання (Bootstrap)
+```bash
+kubectl apply -f bootstrap/root-application.yaml
+```
+*У веб-інтерфейсі Argo CD дерево застосунку переходить у стан **Synced** та **Healthy**.*
+
+#### Сценарій 2: Демонстрація дрейфу (Drift Detection) та selfHeal
+1. У файлі `argocd-apps/booking-app.yaml` тимчасово вимкнено `selfHeal: false`.
+2. Адміністратор вручну змінює стан у кластері в обхід Git:
+   ```bash
+   kubectl scale deployment booking-release-booking-app --replicas=5 -n workspace-booking
+   ```
+3. Argo CD миттєво фіксує невідповідність (дрейф конфігурації) та переводить додаток у статус **OutOfSync** (жовтий індикатор).
+4. Увімкнення автоматичного відновлення (`selfHeal: true`): Argo CD самостійно повертає кількість реплік до значення, зафіксованого у Git (`replicaCount: 1`).
+
+#### Сценарій 3: Оновлення версії релізом через Git
+1. Зміна версії образу у `charts/booking-app/values-minikube.yaml`:
+   ```yaml
+   image:
+     tag: "1.1.0"
+   ```
+2. Коміт та пуш:
+   ```bash
+   git commit -am "chore(release): bump booking-api to 1.1.0"
+   git push origin main
+   ```
+3. Argo CD синхронізує оновлення, перезапускає под з новим образом.
+4. Перевірка нової версії:
+   ```bash
+   curl http://localhost:30080/version
+   # Повертає: {"version":"1.1.0", ...}
+   ```
+
+#### Сценарій 4: Демонстрація аварійного стану (Synced + Degraded)
+1. Вказуємо у `values-minikube.yaml` неіснуючий тег: `tag: "broken-tag-999"`, пушимо в Git.
+2. Argo CD успішно застосовує маніфест з Git (**Synced**), але поди переходять у стан `ImagePullBackOff` -> статус стає червоним (**Degraded**).
+3. **Відкат (Rollback):**
+   ```bash
+   git revert HEAD
+   git push origin main
+   ```
+4. Кластер повертається у повністю працездатний стан **Synced + Healthy**. Історія зафіксована у `git log` та у вкладці **History and Rollback** інтерфейсу Argo CD.

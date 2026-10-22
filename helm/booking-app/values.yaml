@@ -55,6 +55,7 @@ config:
   dbName: "workspace_db"
   redisPort: "6379"
   nodeEnv: "development"
+  appVersion: "1.0.0"
   latencyDelayMs: "0"
 
 # Секретні дані (Secrets). Увага: реальні продакшн паролі не комітяться у відкритому вигляді

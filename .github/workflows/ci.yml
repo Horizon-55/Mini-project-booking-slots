@@ -3,6 +3,12 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Explicit image tag (e.g. 1.0.0 or 1.1.0)'
+        required: false
+        default: '1.0.0'
   pull_request:
     branches: [ "main" ]
 
@@ -83,6 +89,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=sha
+            type=raw,value=1.0.0
+            type=raw,value=${{ github.event.inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version != '' }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "booking-app.fullname" . }}-config
+  labels:
+    {{- include "booking-app.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  APP_VERSION: {{ default .Chart.AppVersion .Values.config.appVersion | quote }}
+  PORT: {{ .Values.config.port | quote }}
+  DB_HOST: {{ include "booking-app.postgresFullname" . | quote }}
+  DB_PORT: {{ .Values.config.dbPort | quote }}
+  DB_NAME: {{ .Values.config.dbName | quote }}
+  REDIS_HOST: {{ include "booking-app.redisFullname" . | quote }}
+  REDIS_PORT: {{ .Values.config.redisPort | quote }}
+  LATENCY_DELAY_MS: {{ .Values.config.latencyDelayMs | quote }}
