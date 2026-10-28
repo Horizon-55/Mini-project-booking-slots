@@ -1,0 +1,27 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "booking-app.fullname" . }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "booking-app.labels" . | nindent 4 }}
+    role: alert-rules
+spec:
+  groups:
+  - name: booking-app.rules
+    rules:
+    - alert: HighHttp5xxErrorRate
+      expr: |
+        (
+          sum(rate(http_requests_total{status=~"5..", route!~".*metrics.*|.*health.*"}[1m]))
+          /
+          (sum(rate(http_requests_total{route!~".*metrics.*|.*health.*"}[1m])) > 0)
+        ) * 100 > 5
+      for: 10s
+      labels:
+        severity: critical
+      annotations:
+        summary: "Booking App HTTP 5xx error rate is above 5%"
+        description: "Error rate has exceeded 5% threshold in namespace {{ .Release.Namespace }}"
+{{- end }}

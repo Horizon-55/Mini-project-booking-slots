@@ -1,0 +1,21 @@
+{{- if .Values.analysis.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "booking-app.fullname" . }}-success-rate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "booking-app.labels" . | nindent 4 }}
+spec:
+  metrics:
+  - name: success-rate
+    interval: {{ .Values.analysis.interval | default "10s" }}
+    count: {{ .Values.analysis.count | default 3 }}
+    successCondition: result[0] >= {{ .Values.analysis.threshold | default 0.95 }}
+    failureLimit: {{ .Values.analysis.failureLimit | default 1 }}
+    provider:
+      prometheus:
+        address: {{ .Values.analysis.prometheusAddress | default "http://kube-prometheus-stack-prometheus.monitoring:9090" }}
+        query: |
+          sum(rate(http_requests_total{status!~"5.."}[1m])) / sum(rate(http_requests_total[1m]))
+{{- end }}

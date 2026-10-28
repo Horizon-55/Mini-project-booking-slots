@@ -13,6 +13,7 @@
     "test:failover": "node scripts/test-failover.js",
     "test:cache": "node scripts/test-cache.js",
     "test:canary": "node scripts/test-canary.js",
+    "load:test": "node scripts/load-test.js",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [],
@@ -21,6 +22,7 @@
     "dotenv": "^18.0.5",
     "express": "^5.2.1",
     "pg": "^8.23.1",
+    "prom-client": "^15.1.3",
     "redis": "^6.3.0",
     "zod": "^4.6.5"
   },

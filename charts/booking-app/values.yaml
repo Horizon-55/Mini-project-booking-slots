@@ -57,6 +57,7 @@ config:
   nodeEnv: "development"
   appVersion: "1.0.0"
   latencyDelayMs: "0"
+  failRate: "0"
 
 # Секретні дані (Secrets). Увага: реальні продакшн паролі не комітяться у відкритому вигляді
 secrets:
@@ -94,3 +95,24 @@ redis:
     requests:
       cpu: 50m
       memory: 64Mi
+
+# Моніторинг та аналітика (ЛР-7)
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  interval: 10s
+
+dashboard:
+  enabled: false
+
+prometheusRule:
+  enabled: false
+
+analysis:
+  enabled: false
+  interval: 10s
+  count: 3
+  threshold: 0.95
+  failureLimit: 1
+  prometheusAddress: "http://kube-prometheus-stack-prometheus.monitoring:9090"
+

@@ -1,4 +1,4 @@
-# Values for Minikube GitOps environment (DevOps Lab 6: Argo Rollouts)
+# Values for Minikube GitOps environment (DevOps Lab 7: Observability & Automated Canary Rollout)
 replicaCount: 4
 
 image:
@@ -6,17 +6,22 @@ image:
   pullPolicy: IfNotPresent
   tag: "1.0.0"
 
-# Стратегія Progressive Delivery (ЛР-6)
+# Стратегія Progressive Delivery з автоматичним аналізом за метриками Prometheus (ЛР-7)
 rollout:
   enabled: true
   canary:
     steps:
       - setWeight: 25
-      - pause: { duration: 15s }
+      - pause: { duration: 10s }
+      - analysis:
+          templates:
+            - templateName: booking-app-success-rate
       - setWeight: 50
-      - pause: {} # Ручна пауза для верифікації та promote
-      - setWeight: 75
-      - pause: { duration: 15s }
+      - pause: { duration: 10s }
+      - analysis:
+          templates:
+            - templateName: booking-app-success-rate
+      - setWeight: 100
 
 service:
   type: NodePort
@@ -39,6 +44,27 @@ config:
   nodeEnv: "production"
   appVersion: "1.0.0"
   latencyDelayMs: "0"
+  failRate: "0"
+
+# Моніторинг та аналітика (ЛР-7)
+serviceMonitor:
+  enabled: true
+  path: /metrics
+  interval: 10s
+
+dashboard:
+  enabled: true
+
+prometheusRule:
+  enabled: true
+
+analysis:
+  enabled: true
+  interval: 10s
+  count: 3
+  threshold: 0.95
+  failureLimit: 1
+  prometheusAddress: "http://kube-prometheus-stack-prometheus.monitoring:9090"
 
 postgres:
   persistence:
