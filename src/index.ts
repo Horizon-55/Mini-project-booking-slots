@@ -10,6 +10,7 @@ app.use(express.json());
 
 // Глобальний middleware для ідентифікації екземпляра (Stateless requirement)
 app.use((req: Request, res: Response, next: NextFunction) => {
+    // os.hostname() у Docker повертає унікальний ID контейнера
     res.setHeader('X-Instance-ID', os.hostname());
     next();
 });
@@ -65,15 +66,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Синтетична затримка для симуляції гетерогенного/деградованого вузла (ЛР3 п. 2.3.3)
 const defaultDelayMs = Number(process.env.LATENCY_DELAY_MS) || 0;
 app.use((req: Request, res: Response, next: NextFunction) => {
+    // Можливість задати затримку через ENV (для конкретного контейнера) або через query param ?delay=
     const queryDelay = req.query.delay ? Number(req.query.delay) : null;
     const delay = queryDelay !== null && !isNaN(queryDelay) ? queryDelay : defaultDelayMs;
 
-    if (delay > 0 && !req.path.endsWith('/health') && !req.path.endsWith('/metrics')) {
-        setTimeout(next, delay);
-    } else {
-        next();
-    }
-});
+    // Не затримуємо health-check запити, щоб уникнути хибних спрацювань моніторингу
+    if (delay > 0 && !req.path.endsWith('/health')) {
+        if (delay > 0 && !req.path.endsWith('/health') && !req.path.endsWith('/metrics')) {
+            setTimeout(next, delay);
+        } else {
+            next();
+        }
+    });
 
 // Підключення всіх ендпоінтів з префіксом /api
 app.use('/api', apiRoutes);
@@ -94,6 +98,7 @@ const healthHandler = async (req: Request, res: Response) => {
     };
     let isHealthy = true;
 
+    // 1. Перевірка PostgreSQL
     try {
         await pool.query('SELECT 1');
         checks.database = 'ok';
@@ -102,6 +107,7 @@ const healthHandler = async (req: Request, res: Response) => {
         checks.database = `error: ${dbError.message || dbError}`;
     }
 
+    // 2. Перевірка Redis
     try {
         const pong = await redisClient.ping();
         if (pong === 'PONG') {
@@ -136,6 +142,7 @@ const versionHandler = (req: Request, res: Response) => {
     });
 };
 
+// Доступно як за прямим шляхом, так і через /api
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 app.get('/version', versionHandler);
@@ -146,6 +153,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     if (err.name === 'ZodError') {
         return res.status(400).json({ error: 'Помилка валідації', details: err.errors });
     }
+    console.error('Unhandled Error:', err.message || err);
     logger.error('Unhandled Error:', err);
     res.status(500).json({ error: 'Внутрішня помилка сервера' });
 });
@@ -153,5 +161,6 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
+    console.log(`Сервер запущено на порту ${PORT} (Instance ID: ${os.hostname()})`);
     logger.info(`Server started on port ${PORT}`, { port: PORT });
 });
