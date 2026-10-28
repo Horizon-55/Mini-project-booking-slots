@@ -44,7 +44,7 @@ config:
   nodeEnv: "production"
   appVersion: "1.0.0"
   latencyDelayMs: "0"
-  failRate: "0.5"
+  failRate: "0"
 
 # Моніторинг та аналітика (ЛР-7)
 serviceMonitor:

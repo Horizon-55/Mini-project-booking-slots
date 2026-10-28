@@ -174,4 +174,3 @@ data:
       "uid": "booking-app-observability"
     }
 {{- end }}
-

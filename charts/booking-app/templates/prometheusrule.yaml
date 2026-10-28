@@ -25,4 +25,3 @@ spec:
         summary: "Booking App HTTP 5xx error rate is above 5%"
         description: "Error rate has exceeded 5% threshold in namespace {{ .Release.Namespace }}"
 {{- end }}
-
