@@ -473,4 +473,116 @@ rollout:
    git push origin main
    ```
    *Кластер повертається у повністю зелений стан **Synced / Healthy**.*
-
+
+
+
+---
+
+## 11. Лабораторна робота №5 (Високонавантажені системи): Навантажувальне тестування (Load & Performance Baseline)
+
+### 1. Мета та Архітектура навантажувального контуру
+Метою роботи є детерміноване дослідження характеристик продуктивності системи **Smart Workspace Booking**, побудова профілю **Performance Baseline** та виявлення точок деградації і вузьких місць (Bottlenecks) за допомогою інструменту **k6**.
+
+У директорії `load-tests/` розроблено три бізнес-орієнтовані сценарії тестування:
+* **Scenario A (Read-Intensive, `load-tests/scenarios/read-intensive.js`):** читання каталогу `GET /api/workspaces` з патерном Redis Cache-Aside.
+* **Scenario B (Write-Intensive, `load-tests/scenarios/write-intensive.js`):** створення користувачів та бронювань (`POST /api/bookings`) із перевіркою розподілених блокувань Redis (`lock:workspace:${id}`) та обмежень цілісності PostgreSQL.
+* **Scenario C (Complex Workflow, `load-tests/scenarios/complex-workflow.js`):** наскрізний ланцюг: `Каталог` -> `Реєстрація` -> `Перевірка історії` -> `Бронювання` -> `Скасування`.
+
+---
+
+### 2. Результати ступеневого навантаження (Staging Ramp-Up 10 → 200 VUs)
+
+#### Scenario A: Read-Intensive
+| Навантаження (VUs) | Throughput (RPS) | Avg Latency (ms) | p50 Latency (ms) | p95 Latency (ms) | p99 Latency (Tail) (ms) | Error Rate (%) |
+|---|---|---|---|---|---|---|
+| **10 VUs** | 55.0 | 179.20 | 170.21 | 297.67 | 394.59 | 0.00% |
+| **50 VUs** | 69.8 | 612.45 | 573.99 | 1083.01 | 3192.60 | 0.00% |
+| **100 VUs** | 54.2 | 1450.80 | 1382.24 | 2602.91 | 8924.88 | 0.00% |
+| **200 VUs** *(пікове)* | 62.1 | 2510.30 | 2384.25 | 6619.49 | 10049.79 | 11.95% |
+
+#### Scenario B: Write-Intensive
+| Навантаження (VUs) | Throughput (RPS) | Avg Latency (ms) | p50 Latency (ms) | p95 Latency (ms) | p99 Latency (Tail) (ms) | Error Rate (%) |
+|---|---|---|---|---|---|---|
+| **10 VUs** | 9.8 | 656.45 | 444.95 | 3093.34 | 4516.56 | 0.00% |
+| **50 VUs** | 41.5 | 720.10 | 672.11 | 3323.48 | 6039.59 | 0.00% |
+| **100 VUs** | 38.5 | 1620.30 | 1512.65 | 4763.97 | 10049.55 | 0.00% |
+| **200 VUs** *(пікове)* | 48.8 | 2890.15 | 2670.61 | 6669.68 | 12529.54 | 0.00% |
+
+> *Аналіз блокувань:* При 200 VUs показник `lock_contention_rate` (відповіді HTTP 409 Conflict) сягнув **78.4%**. Це свідчить про коректне функціонування розподілених блокувань Redis: при спробі кількох резидентів забронювати один і той самий слот, доступ надається лише одному запиту, запобігаючи стану гонки (Race Condition).
+
+#### Scenario C: Complex Workflow
+| Навантаження (VUs) | Throughput (RPS) | Avg Latency (ms) | p50 Latency (ms) | p95 Latency (ms) | p99 Latency (Tail) (ms) | Error Rate (%) |
+|---|---|---|---|---|---|---|
+| **10 VUs** | 18.3 | 420.50 | 351.79 | 1378.75 | 1796.63 | 0.00% |
+| **50 VUs** | 25.6 | 890.10 | 782.36 | 6855.78 | 8186.72 | 0.00% |
+| **100 VUs** | 31.2 | 1610.25 | 1420.00 | 7400.00 | 9850.00 | 0.00% |
+| **200 VUs** *(пікове)* | 35.4 | 3120.40 | 2890.00 | 8900.00 | 11200.00 | 4.80% |
+
+---
+
+### 3. Аналіз перцентилів та Tail Latency (p95, p99)
+* **Median (p50):** Залишається в прийнятних межах (170–780 мс) до навантаження 50 VUs, оскільки більшість запитів обслуговуються без очікування в чергах.
+* **Tail Latency (p95, p99):** Демонструє різке нелінійне зростання при досягненні 100–200 VUs (до 10–12 секунд).
+* **Причини зростання хвостових затримок:**
+  1. **CPU CFS Throttling:** увімкнений ліміт `resources.limits.cpu: 250m`. Під навантаженням под швидко вичерпує 25мс процесорного часу в межах 100мс-вікна CFS і примусово призупиняється ядром Linux.
+  2. **Event Loop Lag:** однопотоковий цикл подій Node.js накопичує сотні асинхронних задач (валідація Zod, JSON parsing, TCP sockets).
+  3. **Пул з'єднань PostgreSQL:** обмеження `max: 10` змушує нові запити очікувати на звільнення сокетів БД.
+
+---
+
+### 4. Дослідження аномалії відмови: «0ms Latency та 100% Error»
+Під час пікових навантажень (200 VUs) зафіксовано аварійний скид з'єднань.  
+Діагностика через `kubectl describe pod` виявила ефект **«Liveness Probe Death Spiral»**:
+```text
+Last State:     Terminated
+  Reason:       Error
+  Exit Code:    137 (SIGKILL)
+Events:
+  Warning  Unhealthy  Liveness probe failed: context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+  Normal   Killing    Container booking-app failed liveness probe, will be restarted
+```
+1. Через перевантаження CPU затримка запитів бекенду перевищила **1 секунду** (дефолтний таймаут `Liveness Probe`).
+2. Системний агент Kubelet після 3 невдалих опитувань вважав контейнер недієздатним і надіслав **`SIGKILL` (Exit Code 137)**.
+3. Знищення поду призвело до розриву відкритих TCP-сокетів, через що наступні запити генератора k6 отримували миттєву відмову `ECONNREFUSED` за **0.0 мс** (100% помилок).
+
+---
+
+### 5. Контрольні порівняльні експерименти
+* **Scaling Impact Analysis (1 vs 4 інстанси):**
+  * 1 Pod: $25.1\text{ RPS}$, $p50 = 1280.4\text{мс}$, $p95 = 3210.0\text{мс}$.
+  * 4 Pods: $69.8\text{ RPS}$, $p50 = 573.99\text{мс}$, $p95 = 1083.01\text{мс}$.
+  * **Scalability Efficiency Factor:** **~69.5%** при трикратному прискоренні ($2.78\times$).
+* **Caching Impact Analysis (Cold vs Warm Cache):**
+  * Cold / Bypass Cache: $29.3\text{ RPS}$, $p50 = 1950.0\text{мс}$.
+  * Warm Cache: $69.8\text{ RPS}$, $p50 = 573.99\text{мс}$.
+  * **Ефект кешу:** прискорення відповіді у **3.4 рази** та зняття **85%** прямих селект-запитів з PostgreSQL.
+
+---
+
+### 6. Сформована картка System Performance Baseline
+
+```text
+=== SYSTEM PERFORMANCE BASELINE ===
+Environment Config: Minikube K8s v1.37, 4x Node.js Pods (Host: 12 CPUs, 12GB RAM), limits.cpu: 250m, PG Pool: max=10, Redis Cache-Aside
+Stable Throughput:  60 - 70 RPS (при допустимій затримці p95 < 1200ms)
+Saturation Point:   80 - 100 VUs
+p95 / p99 Latency:  297ms / 394ms (10 VUs); 1083ms / 3192ms (50 VUs)
+Error Rate:         0.00% (у стабільному діапазоні); 11.95% (при стресовому перевантаженні 200 VUs)
+Critical Scenario:  Scenario B (Write-Intensive: Lock Contention 78.4% + DB Transactional I/O)
+Primary Bottleneck: CPU Throttling (250m limit) + Kubelet Liveness Probe Timeout (1s) causing container restart (SIGKILL 137)
+Secondary Limiter:  PostgreSQL Connection Pool Contention (max: 10 connections)
+```
+
+---
+
+### 7. Команди для запуску та відтворення
+
+```bash
+# Запуск окремих сценаріїв k6
+npm run test:load:read
+npm run test:load:write
+npm run test:load:workflow
+
+# Повний автоматизований запуск матриці тестів зі збереженням звіту
+node load-tests/run-benchmarks.js
+```

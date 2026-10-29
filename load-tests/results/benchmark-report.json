@@ -1,0 +1,125 @@
+{
+  "A": {
+    "name": "Scenario A (Read-Intensive)",
+    "levels": [
+      {
+        "vus": 10,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      },
+      {
+        "vus": 50,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      },
+      {
+        "vus": 100,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      },
+      {
+        "vus": 200,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      }
+    ]
+  },
+  "B": {
+    "name": "Scenario B (Write-Intensive)",
+    "levels": [
+      {
+        "vus": 10,
+        "rps": 53.2,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 0
+      },
+      {
+        "vus": 50,
+        "rps": 333.5,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 0
+      },
+      {
+        "vus": 100,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      },
+      {
+        "vus": 200,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      }
+    ]
+  },
+  "C": {
+    "name": "Scenario C (Complex Workflow)",
+    "levels": [
+      {
+        "vus": 10,
+        "rps": 164.4,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      },
+      {
+        "vus": 50,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      },
+      {
+        "vus": 100,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      },
+      {
+        "vus": 200,
+        "rps": 0,
+        "avg": 0,
+        "p50": 0,
+        "p95": 0,
+        "p99": 0,
+        "errRate": 100
+      }
+    ]
+  }
+}

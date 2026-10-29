@@ -14,6 +14,9 @@
     "test:cache": "node scripts/test-cache.js",
     "test:canary": "node scripts/test-canary.js",
     "load:test": "node scripts/load-test.js",
+    "test:load:read": "k6 run load-tests/scenarios/read-intensive.js",
+    "test:load:write": "k6 run load-tests/scenarios/write-intensive.js",
+    "test:load:workflow": "k6 run load-tests/scenarios/complex-workflow.js",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [],
