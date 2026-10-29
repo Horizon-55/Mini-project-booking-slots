@@ -1,4 +1,4 @@
-# Values for Minikube GitOps environment (DevOps Lab 7: Observability & Automated Canary Rollout)
+# Values for Minikube GitOps environment (DevOps Lab 6: Argo Rollouts & Lab 7: Observability)
 replicaCount: 4
 
 image:
@@ -6,22 +6,23 @@ image:
   pullPolicy: IfNotPresent
   tag: "1.0.0"
 
-# Стратегія Progressive Delivery з автоматичним аналізом за метриками Prometheus (ЛР-7)
+# Стратегія Progressive Delivery (ЛР-6 Canary з ручною паузою та ЛР-7 Prometheus Analysis)
 rollout:
   enabled: true
   canary:
     steps:
       - setWeight: 25
-      - pause: { duration: 10s }
+      - pause: { duration: 15s }
       - analysis:
           templates:
             - templateName: booking-app-success-rate
       - setWeight: 50
-      - pause: { duration: 10s }
+      - pause: {} # РУЧНА ПАУЗА: зупинка для верифікації та виконання ручного promote (ЛР-6 п. 3.a)
+      - setWeight: 75
+      - pause: { duration: 15s }
       - analysis:
           templates:
             - templateName: booking-app-success-rate
-      - setWeight: 100
 
 service:
   type: NodePort
@@ -34,11 +35,22 @@ ingress:
 
 resources:
   limits:
-    cpu: 250m
+    cpu: 500m
     memory: 256Mi
   requests:
     cpu: 100m
     memory: 128Mi
+
+# Надійні таймаути для захисту від передчасного SIGKILL Kubelet під навантаженням
+probes:
+  liveness:
+    path: /api/health
+    initialDelaySeconds: 15
+    periodSeconds: 10
+  readiness:
+    path: /api/health
+    initialDelaySeconds: 5
+    periodSeconds: 5
 
 config:
   nodeEnv: "production"

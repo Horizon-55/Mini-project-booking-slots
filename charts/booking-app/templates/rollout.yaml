@@ -22,34 +22,46 @@ spec:
         app.kubernetes.io/component: app
     spec:
       containers:
-      - name: {{ .Chart.Name }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        ports:
-        - containerPort: {{ .Values.service.targetPort }}
-          name: http
-        env:
-        - name: APP_VERSION
-          value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
-        - name: FAIL_RATE
-          value: {{ default "0" .Values.config.failRate | quote }}
-        envFrom:
-        - configMapRef:
-            name: {{ include "booking-app.fullname" . }}-config
-        - secretRef:
-            name: {{ include "booking-app.fullname" . }}-secret
-        resources:
-          {{- toYaml .Values.resources | nindent 10 }}
-        livenessProbe:
-          httpGet:
-            path: {{ .Values.probes.liveness.path }}
-            port: {{ .Values.service.targetPort }}
-          initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
-          periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
-        readinessProbe:
-          httpGet:
-            path: {{ .Values.probes.readiness.path }}
-            port: {{ .Values.service.targetPort }}
-          initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
-          periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+              name: http
+          env:
+            - name: APP_VERSION
+              value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
+            - name: FAIL_RATE
+              value: {{ default "0" .Values.config.failRate | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "booking-app.fullname" . }}-config
+            - secretRef:
+                name: {{ include "booking-app.fullname" . }}-secret
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: {{ .Values.service.targetPort }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            {{- if .Values.probes.liveness.timeoutSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            {{- end }}
+            {{- if .Values.probes.liveness.failureThreshold }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: {{ .Values.service.targetPort }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            {{- if .Values.probes.readiness.timeoutSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            {{- end }}
+            {{- if .Values.probes.readiness.failureThreshold }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+            {{- end }}
 {{- end }}
